@@ -12,7 +12,7 @@ fn main() {
         println!("Problem getting the ps output");
     }
 
-    type PsLine<'a> = (&'a str, &'a str, &'a str);
+    type PsLine<'a> = (&'a str, u32, u32);
 
     String::from_utf8(output.stdout)
         .expect("Unable to parse output")
@@ -22,8 +22,8 @@ fn main() {
         .map(|v| {
             (
                 v.get(10).map_or("", |x| x),
-                v.get(2).map_or("", |x| x),
-                v.get(3).map_or("", |x| x),
+                v.get(2).map_or(0, |x| x.parse().unwrap_or(0)),
+                v.get(3).map_or(0, |x| x.parse().unwrap_or(0)),
             )
         })
         .collect::<Vec<PsLine>>()
