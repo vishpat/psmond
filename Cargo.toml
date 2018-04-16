@@ -1,0 +1,7 @@
+[package]
+name = "psmonitor"
+version = "0.1.0"
+authors = ["Vishal Patil <vishpat@gmail.com>"]
+
+[dependencies]
+error-chain = "0.11.0"
