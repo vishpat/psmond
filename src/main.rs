@@ -10,12 +10,14 @@ fn main() {
 
     if !output.status.success() {
         println!("Problem getting the ps output");
+        return;
     }
 
     type PsLine<'a> = (&'a str, u32, u32);
 
-    String::from_utf8(output.stdout)
-        .expect("Unable to parse output")
+    let ps_output = String::from_utf8(output.stdout).expect("Unable to ps output");
+
+    let mut ps_aux = ps_output
         .lines()
         .skip(1)
         .map(|x| x.split_whitespace().collect::<Vec<&str>>())
@@ -26,6 +28,11 @@ fn main() {
                 v.get(3).map_or(0, |x| x.parse().unwrap_or(0)),
             )
         })
-        .collect::<Vec<PsLine>>()
-        .sort_by_key(|x| x.1);
+        .collect::<Vec<PsLine>>();
+
+
+    ps_aux.sort_by(|a, b| a.1.cmp(&b.1));
+    ps_aux.sort_by(|a, b| a.2.cmp(&b.2));
+    println!("{:?}", ps_aux);
+
 }
