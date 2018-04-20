@@ -1,8 +1,23 @@
-extern crate error_chain;
+extern crate mio;
+extern crate mio_uds;
+extern crate tempdir;
 
 use std::process::Command;
+use mio_uds::UnixListener;
+use mio::{Events, Poll, PollOpt, Ready, Token};
 
-fn main() {
+use tempdir::TempDir;
+
+struct PerfData {
+    mem_total: u32,
+    mem_cnt: u32,
+    cpu_total: u32,
+    cpu_cnt: u32,
+}
+
+static sock_name: &'static str = "psmonitor.sock";
+
+fn sample_ps() {
     let output = Command::new("ps")
         .arg("aux")
         .output()
@@ -36,4 +51,23 @@ fn main() {
         .iter()
         .take(5)
         .for_each(|x| println!("{} {} {}", x.0, x.1, x.2));
+}
+
+fn main() {
+    let tmp_dir = TempDir::new(&sock_name).expect("Unable to temp file for the socket");
+    let addr = tmp_dir.path().join("sock");
+
+    let poll = Poll::new().expect("Unable to create an event poll");
+    let srv = UnixListener::bind(&addr).expect("Unable to create the stream socket");
+    poll.register(&srv, Token(0), Ready::all(), PollOpt::edge())
+        .expect("Unable to register the server");
+
+    let mut events = Events::with_capacity(1024);
+
+    loop {
+        poll.poll(&mut events, None).expect("Unable to get events");
+        for event in &events {
+            println!("Got an event {:?} !!!", event);
+        }
+    }
 }
