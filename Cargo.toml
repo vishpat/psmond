@@ -10,4 +10,4 @@ path = "src/daemon/main.rs"
 [dependencies]
 mio = "0.6"
 mio-uds = "0.6"
-tempdir = "0.3"
+daemonize = "0.3.0"
