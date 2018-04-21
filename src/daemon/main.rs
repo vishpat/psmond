@@ -1,12 +1,13 @@
+extern crate daemonize;
 extern crate mio;
 extern crate mio_uds;
-extern crate daemonize;
 
 use std::collections::HashMap;
 use std::process::Command;
 use std::time::Duration;
 use std::path::Path;
 use std::path::PathBuf;
+use std::fs::File;
 
 use mio_uds::UnixListener;
 use mio::{Events, Poll, PollOpt, Ready, Token};
@@ -27,6 +28,8 @@ const MAX_PROCESSES: usize = 5;
 
 static PID_FILE: &'static str = "/tmp/psmonitor.pid";
 static SOCK_FILE: &'static str = "/tmp/psmonitor.sock";
+static STDOUT_FILE: &'static str = "/tmp/psmonitor.stdout";
+static STDERR_FILE: &'static str = "/tmp/psmonitor.stderr";
 
 fn sample_ps(psmap: &mut HashMap<String, PerfData>, total_samples: &mut usize) {
     let output = Command::new("ps")
@@ -89,6 +92,15 @@ fn dump_ps_map(psmap: &HashMap<String, PerfData>, total_samples: usize) {
 }
 
 fn main() {
+    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
+    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
+    let daemonize = Daemonize::new()
+        .pid_file(PID_FILE)
+        .stdout(stdout)
+        .stderr(stderr);
+
+    daemonize.start().expect("Unable to daemonize the process");
+
     if Path::new(SOCK_FILE).exists() {
         std::fs::remove_file(SOCK_FILE);
     }
@@ -108,9 +120,6 @@ fn main() {
     let mut psmap: HashMap<String, PerfData> = HashMap::new();
     let mut total_samples: usize = 0;
     let mut events = Events::with_capacity(1024);
-
-    let daemonize = Daemonize::new().pid_file(PID_FILE);
-    daemonize.start().expect("Unable to daemonize the process");
 
     loop {
         poll.poll(&mut events, None).expect("Unable to get events");
