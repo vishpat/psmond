@@ -3,6 +3,10 @@ name = "psmonitor"
 version = "0.1.0"
 authors = ["Vishal Patil <vishpat@gmail.com>"]
 
+[[bin]]
+name = "psmond"
+path = "src/daemon/main.rs"
+
 [dependencies]
 mio = "0.6"
 mio-uds = "0.6"
