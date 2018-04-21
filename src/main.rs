@@ -24,7 +24,7 @@ const MAX_PROCESSES: usize = 5;
 
 static sock_name: &'static str = "psmonitor.sock";
 
-fn sample_ps(psmap: &mut HashMap<&str, PerfData>) {
+fn sample_ps(psmap: &mut HashMap<String, PerfData>) {
     let output = Command::new("ps")
         .arg("aux")
         .output()
@@ -55,7 +55,7 @@ fn sample_ps(psmap: &mut HashMap<&str, PerfData>) {
     ps_aux_trimmed.sort_by(|a, b| (a.1 as u32).cmp(&(b.1 as u32)).reverse());
     ps_aux_trimmed.sort_by(|a, b| (a.2 as u32).cmp(&(b.2 as u32)).reverse());
     ps_aux_trimmed.iter().take(MAX_PROCESSES).for_each(|x| {
-        let perf_data = psmap.entry(x.0).or_insert(PerfData {
+        let perf_data = psmap.entry(x.0.to_string()).or_insert(PerfData {
             cpu_cnt: 1,
             cpu_total: x.1,
             mem_cnt: 1,
@@ -84,7 +84,7 @@ fn main() {
     poll.register(&timer, TIMER_TOKEN, Ready::all(), PollOpt::edge())
         .expect("Unable to register the timer");
 
-    let mut psmap: HashMap<&str, PerfData> = HashMap::new();
+    let mut psmap: HashMap<String, PerfData> = HashMap::new();
 
     let mut events = Events::with_capacity(1024);
 
