@@ -2,27 +2,29 @@ extern crate mio;
 extern crate mio_uds;
 extern crate tempdir;
 
+use std::collections::HashMap;
 use std::process::Command;
 use std::time::Duration;
 use mio_uds::UnixListener;
 use mio::{Events, Poll, PollOpt, Ready, Token};
-use mio::timer::{Timer};
+use mio::timer::Timer;
 
 use tempdir::TempDir;
 
 struct PerfData {
-    mem_total: u32,
+    mem_total: f32,
     mem_cnt: u32,
-    cpu_total: u32,
+    cpu_total: f32,
     cpu_cnt: u32,
 }
 
 const TIMER_TOKEN: Token = Token(1);
 const SOCK_TOKEN: Token = Token(2);
+const MAX_PROCESSES: usize = 5;
 
 static sock_name: &'static str = "psmonitor.sock";
 
-fn sample_ps() {
+fn sample_ps(psmap: &mut HashMap<&str, PerfData>) {
     let output = Command::new("ps")
         .arg("aux")
         .output()
@@ -52,10 +54,19 @@ fn sample_ps() {
 
     ps_aux_trimmed.sort_by(|a, b| (a.1 as u32).cmp(&(b.1 as u32)).reverse());
     ps_aux_trimmed.sort_by(|a, b| (a.2 as u32).cmp(&(b.2 as u32)).reverse());
-    ps_aux_trimmed
-        .iter()
-        .take(5)
-        .for_each(|x| println!("{} {} {}", x.0, x.1, x.2));
+    ps_aux_trimmed.iter().take(MAX_PROCESSES).for_each(|x| {
+        let perf_data = psmap.entry(x.0).or_insert(PerfData {
+            cpu_cnt: 1,
+            cpu_total: x.1,
+            mem_cnt: 1,
+            mem_total: x.2,
+        });
+
+        perf_data.cpu_cnt += 1;
+        perf_data.mem_cnt += 1;
+        perf_data.cpu_total += x.1;
+        perf_data.mem_total += x.2;
+    });
 }
 
 fn main() {
@@ -73,6 +84,8 @@ fn main() {
     poll.register(&timer, TIMER_TOKEN, Ready::all(), PollOpt::edge())
         .expect("Unable to register the timer");
 
+    let mut psmap: HashMap<&str, PerfData> = HashMap::new();
+
     let mut events = Events::with_capacity(1024);
 
     loop {
@@ -80,14 +93,11 @@ fn main() {
         for event in &events {
             match event.token() {
                 TIMER_TOKEN => {
-                    println!("Got an event {:?} !!!", event);
-                    timer.
-                    set_timeout(Duration::from_secs(1), 0);
+                    timer.set_timeout(Duration::from_secs(1), 0);
+                    sample_ps(&mut psmap);
                 }
-                SOCK_TOKEN => {
-
-                }
-                _ => panic!("Unexpected event !!")
+                SOCK_TOKEN => {}
+                _ => panic!("Unexpected event !!"),
             }
         }
     }
