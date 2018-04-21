@@ -3,8 +3,10 @@ extern crate mio_uds;
 extern crate tempdir;
 
 use std::process::Command;
+use std::time::Duration;
 use mio_uds::UnixListener;
 use mio::{Events, Poll, PollOpt, Ready, Token};
+use mio::timer::{Timer};
 
 use tempdir::TempDir;
 
@@ -14,6 +16,9 @@ struct PerfData {
     cpu_total: u32,
     cpu_cnt: u32,
 }
+
+const TIMER_TOKEN: Token = Token(1);
+const SOCK_TOKEN: Token = Token(2);
 
 static sock_name: &'static str = "psmonitor.sock";
 
@@ -58,16 +63,32 @@ fn main() {
     let addr = tmp_dir.path().join("sock");
 
     let poll = Poll::new().expect("Unable to create an event poll");
+
     let srv = UnixListener::bind(&addr).expect("Unable to create the stream socket");
-    poll.register(&srv, Token(0), Ready::all(), PollOpt::edge())
+    poll.register(&srv, SOCK_TOKEN, Ready::all(), PollOpt::edge())
         .expect("Unable to register the server");
+
+    let mut timer = Timer::default();
+    timer.set_timeout(Duration::from_secs(1), 0);
+    poll.register(&timer, TIMER_TOKEN, Ready::all(), PollOpt::edge())
+        .expect("Unable to register the timer");
 
     let mut events = Events::with_capacity(1024);
 
     loop {
         poll.poll(&mut events, None).expect("Unable to get events");
         for event in &events {
-            println!("Got an event {:?} !!!", event);
+            match event.token() {
+                TIMER_TOKEN => {
+                    println!("Got an event {:?} !!!", event);
+                    timer.
+                    set_timeout(Duration::from_secs(1), 0);
+                }
+                SOCK_TOKEN => {
+
+                }
+                _ => panic!("Unexpected event !!")
+            }
         }
     }
 }
