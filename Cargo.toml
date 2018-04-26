@@ -8,6 +8,9 @@ name = "psmond"
 path = "src/daemon/main.rs"
 
 [dependencies]
-mio = "0.6"
-mio-uds = "0.6"
 daemonize = "0.3.0"
+tokio = "0.1.5"
+tokio-uds = "0.1"
+tokio-core = "0.1"
+tokio-timer = "0.2.1"
+futures = "0.1.21"

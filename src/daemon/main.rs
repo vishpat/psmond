@@ -1,6 +1,8 @@
 extern crate daemonize;
-extern crate mio;
-extern crate mio_uds;
+extern crate tokio;
+extern crate tokio_core;
+extern crate tokio_uds;
+extern crate futures;
 
 use std::collections::HashMap;
 use std::process::Command;
@@ -8,11 +10,13 @@ use std::time::Duration;
 use std::path::Path;
 use std::path::PathBuf;
 use std::fs::File;
+use std::time::Instant;
 
-use mio_uds::UnixListener;
-use mio::{Events, Poll, PollOpt, Ready, Token};
-use mio::timer::Timer;
-
+use tokio::prelude::*;
+use tokio::timer::Interval;
+use tokio_core::reactor::Core;
+use tokio_core::io::read_to_end;
+use tokio_uds::UnixListener;
 use daemonize::Daemonize;
 
 struct PerfData {
@@ -22,8 +26,6 @@ struct PerfData {
     mem_cnt: u32,
 }
 
-const TIMER_TOKEN: Token = Token(1);
-const SOCK_TOKEN: Token = Token(2);
 const MAX_PROCESSES: usize = 5;
 
 static PID_FILE: &'static str = "/tmp/psmonitor.pid";
@@ -101,37 +103,35 @@ fn main() {
 
     daemonize.start().expect("Unable to daemonize the process");
 
-    if Path::new(SOCK_FILE).exists() {
-        std::fs::remove_file(SOCK_FILE);
-    }
-    let addr = PathBuf::from(SOCK_FILE);
+    let mut core = Core::new().expect("Unable to create tokio core");
 
-    let poll = Poll::new().expect("Unable to create an event poll");
-
-    let srv = UnixListener::bind(&addr).expect("Unable to create the stream socket");
-    poll.register(&srv, SOCK_TOKEN, Ready::all(), PollOpt::edge())
-        .expect("Unable to register the server");
-
-    let mut timer = Timer::default();
-    timer.set_timeout(Duration::from_secs(1), 0);
-    poll.register(&timer, TIMER_TOKEN, Ready::all(), PollOpt::edge())
-        .expect("Unable to register the timer");
 
     let mut psmap: HashMap<String, PerfData> = HashMap::new();
     let mut total_samples: usize = 0;
-    let mut events = Events::with_capacity(1024);
 
-    loop {
-        poll.poll(&mut events, None).expect("Unable to get events");
-        for event in &events {
-            match event.token() {
-                TIMER_TOKEN => {
-                    timer.set_timeout(Duration::from_secs(1), 0);
-                    sample_ps(&mut psmap, &mut total_samples);
-                }
-                SOCK_TOKEN => dump_ps_map(&psmap, total_samples),
-                _ => panic!("Unexpected event !!"),
-            }
-        }
-    }
+    let timer_task = Interval::new(Instant::now(), Duration::from_millis(1000))
+        .for_each(|instant| {
+            sample_ps(&mut psmap, &mut total_samples);
+            Ok(())
+        });
+
+    let handle = core.handle();
+
+    let cmd_listener =
+        UnixListener::bind(SOCK_FILE, &handle).expect("Unable to bind the Unix socket stream");
+
+    let cmd_task = cmd_listener.incoming().for_each(|(socket, _)| {
+        let buf = Vec::new();
+        let reader = read_to_end(socket, buf)
+            .map(|(_, _buf)| {
+                println!("incoming: {:?}", str::from_utf8(&_buf).unwrap());
+            })
+            .then(|_| Ok(()));
+        handle.spawn(reader);
+        Ok(())
+    });
+
+    let async_tasks = future::join_all(vec![cmd_task, timer_task]);
+
+    core.run(async_tasks).unwrap();
 }
