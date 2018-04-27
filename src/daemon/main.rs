@@ -1,8 +1,8 @@
 extern crate daemonize;
+extern crate futures;
 extern crate tokio;
 extern crate tokio_core;
 extern crate tokio_uds;
-extern crate futures;
 
 use std::collections::HashMap;
 use std::process::Command;
@@ -14,8 +14,8 @@ use std::time::Instant;
 
 use tokio::prelude::*;
 use tokio::timer::Interval;
+use tokio::io::read_to_end;
 use tokio_core::reactor::Core;
-use tokio_core::io::read_to_end;
 use tokio_uds::UnixListener;
 use daemonize::Daemonize;
 
@@ -94,17 +94,16 @@ fn dump_ps_map(psmap: &HashMap<String, PerfData>, total_samples: usize) {
 }
 
 fn main() {
-    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
-    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
-    let daemonize = Daemonize::new()
-        .pid_file(PID_FILE)
-        .stdout(stdout)
-        .stderr(stderr);
-
-    daemonize.start().expect("Unable to daemonize the process");
-
+    //    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
+    //    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
+    //    let daemonize = Daemonize::new()
+    //        .pid_file(PID_FILE)
+    //        .stdout(stdout)
+    //        .stderr(stderr);
+    //
+    //    daemonize.start().expect("Unable to daemonize the process");
+    //
     let mut core = Core::new().expect("Unable to create tokio core");
-
 
     let mut psmap: HashMap<String, PerfData> = HashMap::new();
     let mut total_samples: usize = 0;
@@ -112,26 +111,31 @@ fn main() {
     let timer_task = Interval::new(Instant::now(), Duration::from_millis(1000))
         .for_each(|instant| {
             sample_ps(&mut psmap, &mut total_samples);
+            println!("psmon beat!!");
             Ok(())
-        });
+        })
+        .map_err(|e| panic!("interval errored; err={:?}", e));
 
     let handle = core.handle();
 
     let cmd_listener =
         UnixListener::bind(SOCK_FILE, &handle).expect("Unable to bind the Unix socket stream");
 
-    let cmd_task = cmd_listener.incoming().for_each(|(socket, _)| {
-        let buf = Vec::new();
-        let reader = read_to_end(socket, buf)
-            .map(|(_, _buf)| {
-                println!("incoming: {:?}", str::from_utf8(&_buf).unwrap());
-            })
-            .then(|_| Ok(()));
-        handle.spawn(reader);
-        Ok(())
-    });
+    let cmd_task = cmd_listener
+        .incoming()
+        .for_each(|(socket, _)| {
+            let buf = Vec::new();
+            let reader = tokio::io::read_to_end(socket, buf)
+                .map(|(_, _buf)| {
+                    println!("incoming: {:?}", String::from_utf8(_buf).unwrap());
+                })
+                .then(|_| Ok(()));
+            handle.spawn(reader);
+            Ok(())
+        })
+        .map_err(|e| panic!("interval errored; err={:?}", e));
 
-    let async_tasks = future::join_all(vec![cmd_task, timer_task]);
+    let async_tasks = timer_task.join(cmd_task);
 
-    core.run(async_tasks).unwrap();
+    core.run(async_tasks).expect("Core run failed");
 }
