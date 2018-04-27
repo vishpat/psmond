@@ -94,15 +94,15 @@ fn dump_ps_map(psmap: &HashMap<String, PerfData>, total_samples: usize) {
 }
 
 fn main() {
-    //    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
-    //    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
-    //    let daemonize = Daemonize::new()
-    //        .pid_file(PID_FILE)
-    //        .stdout(stdout)
-    //        .stderr(stderr);
-    //
-    //    daemonize.start().expect("Unable to daemonize the process");
-    //
+    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
+    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
+    let daemonize = Daemonize::new()
+        .pid_file(PID_FILE)
+        .stdout(stdout)
+        .stderr(stderr);
+
+    daemonize.start().expect("Unable to daemonize the process");
+
     let mut core = Core::new().expect("Unable to create tokio core");
 
     let mut psmap: HashMap<String, PerfData> = HashMap::new();
@@ -111,7 +111,6 @@ fn main() {
     let timer_task = Interval::new(Instant::now(), Duration::from_millis(1000))
         .for_each(|instant| {
             sample_ps(&mut psmap, &mut total_samples);
-            println!("psmon beat!!");
             Ok(())
         })
         .map_err(|e| panic!("interval errored; err={:?}", e));
