@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::fs::File;
 use std::time::Instant;
+use std::path::Path;
 
 use tokio::prelude::*;
 use tokio::timer::Interval;
@@ -26,8 +27,17 @@ static SOCK_FILE: &'static str = "/tmp/psmonitor.sock";
 static STDOUT_FILE: &'static str = "/tmp/psmonitor.stdout";
 static STDERR_FILE: &'static str = "/tmp/psmonitor.stderr";
 
-
 fn main() {
+    let stale_files = vec![PID_FILE, SOCK_FILE, STDOUT_FILE, STDERR_FILE];
+    stale_files
+        .iter()
+        .filter(|file| Path::new(file).exists())
+        .for_each(|file| {
+            std::fs::remove_file(file)
+                .expect(format!("Unable to remove the existing file {}", file).as_ref())
+        });
+
+    // Daemonize this process
     let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
     let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
     let daemonize = Daemonize::new()
@@ -37,6 +47,7 @@ fn main() {
 
     daemonize.start().expect("Unable to daemonize the process");
 
+    // Timer task to sample the process stats every second
     let mut core = Core::new().expect("Unable to create tokio core");
 
     let mut psmap: HashMap<String, procstats::PerfData> = HashMap::new();
@@ -49,7 +60,10 @@ fn main() {
         })
         .map_err(|e| panic!("interval errored; err={:?}", e));
 
+    // Task to start a Unix socket stream server to listen for commands
     let handle = core.handle();
+
+    if Path::new(SOCK_FILE).exists() {}
 
     let cmd_listener =
         UnixListener::bind(SOCK_FILE, &handle).expect("Unable to bind the Unix socket stream");
@@ -59,8 +73,12 @@ fn main() {
         .for_each(|(socket, _)| {
             let buf = Vec::new();
             let reader = read_to_end(socket, buf)
-                .map(|(_, _buf)| {
+                .map(|(mut socket, _buf)| {
                     println!("incoming: {:?}", String::from_utf8(_buf).unwrap());
+                    match socket.write_fmt(format_args!("Hello")) {
+                        Result::Ok(r) => println!("Wrote {:?}", r),
+                        Result::Err(e) => println!("Got err while writing {:?}", e),
+                    }
                 })
                 .then(|_| Ok(()));
             handle.spawn(reader);
@@ -68,6 +86,7 @@ fn main() {
         })
         .map_err(|e| panic!("interval errored; err={:?}", e));
 
+    // Run the futures
     let async_tasks = timer_task.join(cmd_task);
 
     core.run(async_tasks).expect("Core run failed");
