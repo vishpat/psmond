@@ -13,7 +13,6 @@ use std::path::Path;
 
 use tokio::prelude::*;
 use tokio::timer::Interval;
-use tokio::io::read_to_end;
 use tokio_core::reactor::Core;
 use tokio_uds::UnixListener;
 use daemonize::Daemonize;
@@ -70,18 +69,10 @@ fn main() {
 
     let cmd_task = cmd_listener
         .incoming()
-        .for_each(|(socket, _)| {
-            let buf = Vec::new();
-            let reader = read_to_end(socket, buf)
-                .map(|(mut socket, _buf)| {
-                    println!("incoming: {:?}", String::from_utf8(_buf).unwrap());
-                    match socket.write_fmt(format_args!("Hello")) {
-                        Result::Ok(r) => println!("Wrote {:?}", r),
-                        Result::Err(e) => println!("Got err while writing {:?}", e),
-                    }
-                })
-                .then(|_| Ok(()));
-            handle.spawn(reader);
+        .for_each(|(mut socket, _)| {
+            let mut buf : [u8; 1024] = [0; 1024];
+            socket.read(&mut buf).expect("Problem while reading from the client");
+            socket.write("Hello".as_bytes()).expect("Problem while sending response to the client");
             Ok(())
         })
         .map_err(|e| panic!("interval errored; err={:?}", e));
