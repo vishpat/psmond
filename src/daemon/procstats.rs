@@ -1,6 +1,9 @@
+
 use std::process::Command;
 use std::collections::HashMap;
 
+
+#[derive(Serialize, Deserialize)]
 pub struct PerfData {
     cpu_total: f32,
     cpu_cnt: u32,

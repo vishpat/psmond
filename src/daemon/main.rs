@@ -3,14 +3,19 @@ extern crate futures;
 extern crate tokio;
 extern crate tokio_core;
 extern crate tokio_uds;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
+
 
 use std::collections::HashMap;
-
 use std::time::Duration;
 use std::fs::File;
 use std::time::Instant;
 use std::path::Path;
-
+use std::sync::RwLock;
+use std::ops::Deref;
 use tokio::prelude::*;
 use tokio::timer::Interval;
 use tokio_core::reactor::Core;
@@ -37,23 +42,25 @@ fn main() {
         });
 
     // Daemonize this process
-    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
-    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
-    let daemonize = Daemonize::new()
-        .pid_file(PID_FILE)
-        .stdout(stdout)
-        .stderr(stderr);
-
-    daemonize.start().expect("Unable to daemonize the process");
-
+//    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
+//    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
+//    let daemonize = Daemonize::new()
+//        .pid_file(PID_FILE)
+//        .stdout(stdout)
+//        .stderr(stderr);
+//
+//    daemonize.start().expect("Unable to daemonize the process");
+//
     // Timer task to sample the process stats every second
     let mut core = Core::new().expect("Unable to create tokio core");
 
-    let mut psmap: HashMap<String, procstats::PerfData> = HashMap::new();
+    let psmap: HashMap<String, procstats::PerfData> = HashMap::new();
+    let protected_psmap = RwLock::new(psmap);
     let mut total_samples: usize = 0;
 
     let timer_task = Interval::new(Instant::now(), Duration::from_millis(1000))
         .for_each(|_instant| {
+            let mut psmap = protected_psmap.write().unwrap();
             procstats::sample_ps(&mut psmap, MAX_PROCESSES, &mut total_samples);
             Ok(())
         })
@@ -70,9 +77,12 @@ fn main() {
     let cmd_task = cmd_listener
         .incoming()
         .for_each(|(mut socket, _)| {
+            println!("New socket");
             let mut buf : [u8; 1024] = [0; 1024];
             socket.read(&mut buf).expect("Problem while reading from the client");
-            socket.write("Hello".as_bytes()).expect("Problem while sending response to the client");
+            let psmap = protected_psmap.read().unwrap();
+            let json_response = serde_json::to_string(&psmap.deref()).expect("Unable to serialize the ps map");
+            socket.write(json_response.as_bytes()).expect("Problem while sending response to the client");
             Ok(())
         })
         .map_err(|e| panic!("interval errored; err={:?}", e));
