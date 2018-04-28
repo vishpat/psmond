@@ -30,32 +30,37 @@ static SOCK_FILE: &'static str = "/tmp/psmonitor.sock";
 static STDOUT_FILE: &'static str = "/tmp/psmonitor.stdout";
 static STDERR_FILE: &'static str = "/tmp/psmonitor.stderr";
 
-fn main() {
+fn daemonsize_process() -> Result<(), daemonize::DaemonizeError> {
+    // Daemonize this process
+    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
+    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
+    let daemonize = Daemonize::new()
+        .pid_file(PID_FILE)
+        .stdout(stdout)
+        .stderr(stderr);
+
+    daemonize.start()?;
+    Ok(())
+}
+
+fn clear_stale_files() -> Result<(), std::io::Error> {
     let stale_files = vec![PID_FILE, SOCK_FILE, STDOUT_FILE, STDERR_FILE];
     stale_files
         .iter()
         .filter(|file| Path::new(file).exists())
-        .for_each(|file| {
-            std::fs::remove_file(file)
-                .expect(format!("Unable to remove the existing file {}", file).as_ref())
-        });
+        .for_each(|file| std::fs::remove_file(file).expect(&format!("Unable to remove file {}", file)));
+    Ok(())
+}
 
-    // Daemonize this process
-    //    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
-    //    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
-    //    let daemonize = Daemonize::new()
-    //        .pid_file(PID_FILE)
-    //        .stdout(stdout)
-    //        .stderr(stderr);
-    //
-    //    daemonize.start().expect("Unable to daemonize the process");
-    //
-    // Timer task to sample the process stats every second
-    let mut core = Core::new().expect("Unable to create tokio core");
+fn main() {
+    clear_stale_files().expect("Unable to clear stale files");
+    daemonsize_process().expect("Unable to daemonize the process");
 
     let psmap: HashMap<String, procstats::PerfData> = HashMap::new();
     let timer_psmap = Arc::new(RwLock::new(psmap));
     let mut total_samples: usize = 0;
+
+    let mut core = Core::new().expect("Unable to create tokio core");
 
     let timer_task = Interval::new(Instant::now(), Duration::from_millis(1000))
         .for_each(|_instant| {
