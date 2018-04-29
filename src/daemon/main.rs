@@ -48,7 +48,9 @@ fn clear_stale_files() -> Result<(), std::io::Error> {
     stale_files
         .iter()
         .filter(|file| Path::new(file).exists())
-        .for_each(|file| std::fs::remove_file(file).expect(&format!("Unable to remove file {}", file)));
+        .for_each(|file| {
+            std::fs::remove_file(file).expect(&format!("Unable to remove file {}", file))
+        });
     Ok(())
 }
 
@@ -84,6 +86,13 @@ fn main() {
             let status_psmap = timer_psmap.clone();
             handle.spawn(future::lazy(move || {
                 let mut buf: [u8; 1024] = [0; 1024];
+                loop {
+                    match socket.poll_read() {
+                        Async::NotReady => continue,
+                        Async::Ready(_) => break,
+                    }
+                }
+
                 socket
                     .read(&mut buf)
                     .expect("Problem while reading from the client");
@@ -92,7 +101,13 @@ fn main() {
                     serde_json::to_string(&psmap.deref()).expect("Unable to serialize the ps map");
                 socket
                     .write(json_response.as_bytes())
-                    .expect("Problem while sending response to the client");
+                    .map_err(|_| println!("Unable to write"))
+                    .unwrap();
+                socket
+                    .flush()
+                    .map_err(|_| println!("Unable to flush"))
+                    .unwrap();
+
                 Ok(())
             }));
             Ok(())
