@@ -18,7 +18,6 @@ use tokio::timer::Interval;
 use tokio_core::reactor::Core;
 use tokio_uds::UnixListener;
 
-
 mod procstats;
 mod daemon;
 
@@ -48,8 +47,8 @@ fn main() {
 
     if Path::new(daemon::SOCK_FILE).exists() {}
 
-    let cmd_listener =
-        UnixListener::bind(daemon::SOCK_FILE, &handle).expect("Unable to bind the Unix socket stream");
+    let cmd_listener = UnixListener::bind(daemon::SOCK_FILE, &handle)
+        .expect("Unable to bind the Unix socket stream");
 
     let cmd_task = cmd_listener
         .incoming()
@@ -74,11 +73,14 @@ fn main() {
 
                 #[derive(Serialize)]
                 struct PsDump<'a> {
-                    psmap : &'a HashMap<String, procstats::PerfData>,
+                    psmap: &'a HashMap<String, procstats::PerfData>,
                     total_samples: usize,
                 }
 
-                let psdump_data = PsDump{psmap: psmap.deref(), total_samples:*(samples.deref())};
+                let psdump_data = PsDump {
+                    psmap: psmap.deref(),
+                    total_samples: *(samples.deref()),
+                };
 
                 let json_response =
                     serde_json::to_string(&psdump_data).expect("Unable to serialize the ps map");

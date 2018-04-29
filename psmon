@@ -1,0 +1,25 @@
+#!/usr/bin/env python
+
+import socket
+import sys
+
+# Create a UDS socket
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+
+# Connect the socket to the port where the server is listening
+server_address = '/tmp/psmonitor.sock'
+try:
+    sock.connect(server_address)
+except socket.error, msg:
+    print(msg)
+    sys.exit(1)
+
+try:
+    # Send data
+    message = 'status'
+    sock.sendall(message)
+
+    data = sock.recv(1024 * 2)
+    print('%s' % data)
+finally:
+    sock.close()
