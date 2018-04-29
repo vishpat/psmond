@@ -29,15 +29,16 @@ fn main() {
     daemon::daemonsize_process().expect("Unable to daemonize the process");
 
     let psmap: HashMap<String, procstats::PerfData> = HashMap::new();
+    let total_samples = Arc::new(RwLock::new(0));
     let timer_psmap = Arc::new(RwLock::new(psmap));
-    let mut total_samples: usize = 0;
 
     let mut core = Core::new().expect("Unable to create tokio core");
 
     let timer_task = Interval::new(Instant::now(), Duration::from_millis(1000))
         .for_each(|_instant| {
             let mut psmap = timer_psmap.write().unwrap();
-            procstats::sample_ps(&mut psmap, MAX_PROCESSES, &mut total_samples);
+            let mut samples = total_samples.write().unwrap();
+            procstats::sample_ps(&mut psmap, MAX_PROCESSES, &mut samples);
             Ok(())
         })
         .map_err(|e| panic!("interval errored; err={:?}", e));
@@ -54,6 +55,8 @@ fn main() {
         .incoming()
         .for_each(|(mut socket, _)| {
             let status_psmap = timer_psmap.clone();
+            let status_samples = total_samples.clone();
+
             handle.spawn(future::lazy(move || {
                 let mut buf: [u8; 1024] = [0; 1024];
                 loop {
@@ -67,8 +70,18 @@ fn main() {
                     .read(&mut buf)
                     .expect("Problem while reading from the client");
                 let psmap = status_psmap.read().unwrap();
+                let samples = status_samples.read().unwrap();
+
+                #[derive(Serialize)]
+                struct PsDump<'a> {
+                    psmap : &'a HashMap<String, procstats::PerfData>,
+                    total_samples: usize,
+                }
+
+                let psdump_data = PsDump{psmap: psmap.deref(), total_samples:*(samples.deref())};
+
                 let json_response =
-                    serde_json::to_string(&psmap.deref()).expect("Unable to serialize the ps map");
+                    serde_json::to_string(&psdump_data).expect("Unable to serialize the ps map");
                 socket.write(json_response.as_bytes()).unwrap_or(0);
                 socket.flush().unwrap_or(());
 

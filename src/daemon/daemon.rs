@@ -4,8 +4,8 @@ use std;
 use std::fs::File;
 use std::path::Path;
 
-static PID_FILE: &'static str = "/tmp/psmonitor.pid";
 pub static SOCK_FILE: &'static str = "/tmp/psmonitor.sock";
+static PID_FILE: &'static str = "/tmp/psmonitor.pid";
 static STDOUT_FILE: &'static str = "/tmp/psmonitor.stdout";
 static STDERR_FILE: &'static str = "/tmp/psmonitor.stderr";
 
