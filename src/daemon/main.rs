@@ -99,14 +99,8 @@ fn main() {
                 let psmap = status_psmap.read().unwrap();
                 let json_response =
                     serde_json::to_string(&psmap.deref()).expect("Unable to serialize the ps map");
-                socket
-                    .write(json_response.as_bytes())
-                    .map_err(|_| println!("Unable to write"))
-                    .unwrap();
-                socket
-                    .flush()
-                    .map_err(|_| println!("Unable to flush"))
-                    .unwrap();
+                socket.write(json_response.as_bytes()).unwrap_or(0);
+                socket.flush().unwrap_or(());
 
                 Ok(())
             }));
