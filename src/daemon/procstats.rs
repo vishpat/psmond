@@ -6,9 +6,8 @@ use std::collections::HashMap;
 #[derive(Serialize, Deserialize)]
 pub struct PerfData {
     cpu_total: f32,
-    cpu_cnt: u32,
     mem_total: f32,
-    mem_cnt: u32,
+    sample_cnt: u32,
 }
 
 pub fn sample_ps(psmap: &mut HashMap<String, PerfData>, max_processes:usize, total_samples: &mut usize) {
@@ -44,15 +43,13 @@ pub fn sample_ps(psmap: &mut HashMap<String, PerfData>, max_processes:usize, tot
     ps_aux_trimmed.iter().take(max_processes).for_each(|x| {
         let perf_data = psmap.entry(x.0.to_string()).or_insert(PerfData {
             cpu_total: x.1,
-            cpu_cnt: 1,
             mem_total: x.2,
-            mem_cnt: 1,
+            sample_cnt: 1,
         });
 
         perf_data.cpu_total += x.1;
-        perf_data.cpu_cnt += 1;
         perf_data.mem_total += x.2;
-        perf_data.mem_cnt += 1;
+        perf_data.sample_cnt += 1;
     });
 
     *total_samples += 1;

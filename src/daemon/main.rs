@@ -1,4 +1,3 @@
-extern crate daemonize;
 extern crate futures;
 extern crate serde;
 #[macro_use]
@@ -10,7 +9,6 @@ extern crate tokio_uds;
 
 use std::collections::HashMap;
 use std::time::Duration;
-use std::fs::File;
 use std::time::Instant;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -19,44 +17,16 @@ use tokio::prelude::*;
 use tokio::timer::Interval;
 use tokio_core::reactor::Core;
 use tokio_uds::UnixListener;
-use daemonize::Daemonize;
+
 
 mod procstats;
+mod daemon;
 
 const MAX_PROCESSES: usize = 5;
 
-static PID_FILE: &'static str = "/tmp/psmonitor.pid";
-static SOCK_FILE: &'static str = "/tmp/psmonitor.sock";
-static STDOUT_FILE: &'static str = "/tmp/psmonitor.stdout";
-static STDERR_FILE: &'static str = "/tmp/psmonitor.stderr";
-
-fn daemonsize_process() -> Result<(), daemonize::DaemonizeError> {
-    // Daemonize this process
-    let stdout = File::create(STDOUT_FILE).expect("Unable to created stdout file for the daemon");
-    let stderr = File::create(STDERR_FILE).expect("Unable to created stderr file for the daemon");
-    let daemonize = Daemonize::new()
-        .pid_file(PID_FILE)
-        .stdout(stdout)
-        .stderr(stderr);
-
-    daemonize.start()?;
-    Ok(())
-}
-
-fn clear_stale_files() -> Result<(), std::io::Error> {
-    let stale_files = vec![PID_FILE, SOCK_FILE, STDOUT_FILE, STDERR_FILE];
-    stale_files
-        .iter()
-        .filter(|file| Path::new(file).exists())
-        .for_each(|file| {
-            std::fs::remove_file(file).expect(&format!("Unable to remove file {}", file))
-        });
-    Ok(())
-}
-
 fn main() {
-    clear_stale_files().expect("Unable to clear stale files");
-    daemonsize_process().expect("Unable to daemonize the process");
+    daemon::clear_stale_files().expect("Unable to clear stale files");
+    daemon::daemonsize_process().expect("Unable to daemonize the process");
 
     let psmap: HashMap<String, procstats::PerfData> = HashMap::new();
     let timer_psmap = Arc::new(RwLock::new(psmap));
@@ -75,10 +45,10 @@ fn main() {
     // Task to start a Unix socket stream server to listen for commands
     let handle = core.handle();
 
-    if Path::new(SOCK_FILE).exists() {}
+    if Path::new(daemon::SOCK_FILE).exists() {}
 
     let cmd_listener =
-        UnixListener::bind(SOCK_FILE, &handle).expect("Unable to bind the Unix socket stream");
+        UnixListener::bind(daemon::SOCK_FILE, &handle).expect("Unable to bind the Unix socket stream");
 
     let cmd_task = cmd_listener
         .incoming()
