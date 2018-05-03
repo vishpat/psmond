@@ -2,6 +2,14 @@
 name = "psmonitor"
 version = "0.1.0"
 authors = ["Vishal Patil <vishpat@gmail.com>"]
+license = "MIT"
+homepage = "https://github.com/vishpat/psmond"
+repository = "https://github.com/vishpat/psmond"
+documentation = "https://github.com/vishpat/psmond"
+description = """
+A Linux process monitoring daemon.
+"""
+
 
 [[bin]]
 name = "psmond"
