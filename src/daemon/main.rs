@@ -15,6 +15,7 @@ use std::sync::{Arc, RwLock};
 use std::ops::Deref;
 use tokio::prelude::*;
 use tokio::timer::Interval;
+use tokio::io;
 use tokio_core::reactor::Core;
 use tokio_uds::UnixListener;
 
@@ -52,43 +53,33 @@ fn main() {
 
     let cmd_task = cmd_listener
         .incoming()
-        .for_each(|(mut socket, _)| {
+        .for_each(|(socket, _)| {
             let status_psmap = timer_psmap.clone();
             let status_samples = total_samples.clone();
 
-            handle.spawn(future::lazy(move || {
-                let mut buf: [u8; 1024] = [0; 1024];
-                loop {
-                    match socket.poll_read() {
-                        Async::NotReady => continue,
-                        Async::Ready(_) => break,
-                    }
-                }
+            let psmap = status_psmap.read().unwrap();
+            let samples = status_samples.read().unwrap();
 
-                socket
-                    .read(&mut buf)
-                    .expect("Problem while reading from the client");
-                let psmap = status_psmap.read().unwrap();
-                let samples = status_samples.read().unwrap();
+            #[derive(Serialize)]
+            struct PsDump<'a> {
+                psmap: &'a HashMap<String, procstats::PerfData>,
+                total_samples: usize,
+            }
 
-                #[derive(Serialize)]
-                struct PsDump<'a> {
-                    psmap: &'a HashMap<String, procstats::PerfData>,
-                    total_samples: usize,
-                }
+            let psdump_data = PsDump {
+                psmap: psmap.deref(),
+                total_samples: *(samples.deref()),
+            };
 
-                let psdump_data = PsDump {
-                    psmap: psmap.deref(),
-                    total_samples: *(samples.deref()),
-                };
+            let json_response =
+                serde_json::to_string(&psdump_data).expect("Unable to serialize the ps map");
 
-                let json_response =
-                    serde_json::to_string(&psdump_data).expect("Unable to serialize the ps map");
-                socket.write(json_response.as_bytes()).unwrap_or(0);
-                socket.flush().unwrap_or(());
-
-                Ok(())
-            }));
+            let buf = [0; 1024];
+            let task
+            = io::read_exact(socket, &mut buf[..])
+                .and_then(move |(socket, _)| io::write_all(socket, json_response.as_bytes()))
+                .then(|_| Ok(()));
+            handle.spawn(task);
             Ok(())
         })
         .map_err(|e| panic!("interval errored; err={:?}", e));
