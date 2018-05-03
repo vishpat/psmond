@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 const PRUNE_INTERVAL: usize = 1000;
 
+/// Total CPU, MEM and sample count for a process
 #[derive(Serialize, Deserialize)]
 pub struct PerfData {
     cpu_total: f32,
@@ -10,6 +11,7 @@ pub struct PerfData {
     sample_cnt: u32,
 }
 
+/// Gather the top CPU and Mem consuming processes
 pub fn sample_ps(
     psmap: &mut HashMap<String, PerfData>,
     max_processes: usize,

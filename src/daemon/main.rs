@@ -83,7 +83,6 @@ fn main() {
         })
         .map_err(|e| panic!("interval errored; err={:?}", e));
 
-    // Run the futures
     let async_tasks = timer_task.join(cmd_task);
 
     core.run(async_tasks).expect("Core run failed");
