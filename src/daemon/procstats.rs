@@ -1,7 +1,7 @@
-
 use std::process::Command;
 use std::collections::HashMap;
 
+const PRUNE_INTERVAL: usize = 1000;
 
 #[derive(Serialize, Deserialize)]
 pub struct PerfData {
@@ -10,7 +10,11 @@ pub struct PerfData {
     sample_cnt: u32,
 }
 
-pub fn sample_ps(psmap: &mut HashMap<String, PerfData>, max_processes:usize, total_samples: &mut usize) {
+pub fn sample_ps(
+    psmap: &mut HashMap<String, PerfData>,
+    max_processes: usize,
+    total_samples: &mut usize,
+) {
     let output = Command::new("ps")
         .arg("aux")
         .output()
@@ -53,4 +57,19 @@ pub fn sample_ps(psmap: &mut HashMap<String, PerfData>, max_processes:usize, tot
     });
 
     *total_samples += 1;
+
+    if *total_samples % PRUNE_INTERVAL == 0 {
+        let purge_keys: Vec<_> = psmap
+            .iter()
+            .filter(|&(_, perf_data)| {
+                ((perf_data.sample_cnt as f32 * 100.0) / (*total_samples as f32) < 5.0)
+            })
+            .map(|(k, _)| k.clone())
+            .collect();
+
+        purge_keys.iter().for_each(|k| {
+            psmap.remove(k);
+            ()
+        });
+    }
 }
