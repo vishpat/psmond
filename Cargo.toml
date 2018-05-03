@@ -1,5 +1,5 @@
 [package]
-name = "psmonitor"
+name = "psmond"
 version = "0.1.0"
 authors = ["Vishal Patil <vishpat@gmail.com>"]
 license = "MIT"
