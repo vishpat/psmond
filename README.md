@@ -2,7 +2,12 @@
 Linux process monitor in RUST
 
 ## psmond
-psmond is a Linux daemon (written in RUST) that keeps track of the processes consuming high CPU and memory.  
+psmond is a Linux daemon (written in RUST) that keeps track of the processes consuming high CPU and memory. The daemon can be built and run as follows
+
+<pre>
+cargo build --release
+./target/release/psmond
+</pre>
 
 ## psmon
 psmon is a (python) client that interacts with the daemon on a Unix domain socket dumps information in json format
