@@ -75,8 +75,7 @@ fn main() {
                 serde_json::to_string(&psdump_data).expect("Unable to serialize the ps map");
 
             let buf = vec![0, 255];
-            let task
-            = io::read_exact(socket, buf)
+            let task = io::read_exact(socket, buf)
                 .and_then(move |(socket, _)| io::write_all(socket, json_response))
                 .then(|_| Ok(()));
             handle.spawn(task);
